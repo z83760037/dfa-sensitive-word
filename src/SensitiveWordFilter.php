@@ -300,7 +300,6 @@ class SensitiveWordFilter
 	private function setTreeByArray(?array $sensitiveWords = null): void
 	{
 		if (file_exists($this->file) && $this->iCache) {
-			$this->words = $this->words ?? unserialize(gzuncompress(file_get_contents($this->file)));
 			return;
 		}
 		
@@ -365,7 +364,7 @@ class SensitiveWordFilter
 			if (!is_dir($catalog)) {
 				mkdir($catalog);
 			}
-			file_put_contents($this->file, gzcompress(serialize($this->words), 4));
+			file_put_contents($this->file, serialize($this->words));
 		}
 		
 		return $this;
@@ -373,10 +372,12 @@ class SensitiveWordFilter
 	
 	private function getWords()
 	{
-		if (file_exists($this->file) && $this->iCache) {
-			$this->words = $this->words ?? unserialize(gzuncompress(file_get_contents($this->file)));
-		} else {
-			$this->words = $this->words ?? new HashMap();
+		if (empty($this->words)) {
+			if (file_exists($this->file) && $this->iCache) {
+				$this->words =  unserialize(file_get_contents($this->file));
+			} else {
+				$this->words =  new HashMap();
+			}
 		}
 		
 		return $this->words;
@@ -391,7 +392,6 @@ class SensitiveWordFilter
 	private function setTreeByFile($filepath): void
 	{
 		if (file_exists($this->file) && $this->iCache) {
-			$this->words = $this->words ?? unserialize(gzuncompress(file_get_contents($this->file)));
 			return;
 		}
 		
