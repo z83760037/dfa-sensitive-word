@@ -106,17 +106,6 @@ class SensitiveWordFilter
 	}
 	
 	/**
-	 * 设置缓存
-	 *
-	 * @return SensitiveWordFilter
-	 */
-	public function setCache(): SensitiveWordFilter
-	{
-		$this->iCache = true;
-		return $this;
-	}
-	
-	/**
 	 * 清空缓存
 	 *
 	 * @return $this
@@ -212,7 +201,7 @@ class SensitiveWordFilter
 	 * @param  string  $eTag  标签开头，如</span>
 	 * @return string
 	 */
-	public function mark(string $txt, string $sTag, string $eTag): string
+	public function mark(string $txt, string $sTag = '<span>', string $eTag = '</span>'): string
 	{
 		if (empty($txt)) {
 			return $txt;
@@ -306,13 +295,13 @@ class SensitiveWordFilter
 	 * 数组构建铭感词树
 	 *
 	 * @param  array|null  $sensitiveWords
-	 * @return $this
+	 * @return void
 	 */
-	private function setTreeByArray(?array $sensitiveWords = null): SensitiveWordFilter
+	private function setTreeByArray(?array $sensitiveWords = null): void
 	{
 		if (file_exists($this->file) && $this->iCache) {
 			$this->words = $this->words ?? unserialize(gzuncompress(file_get_contents($this->file)));
-			return $this;
+			return;
 		}
 		
 		$this->words = $this->words ?? new HashMap();
@@ -322,7 +311,6 @@ class SensitiveWordFilter
 				$this->buildDFA(trim($word));
 			}
 		}
-		return $this;
 	}
 	
 	/**
@@ -360,27 +348,35 @@ class SensitiveWordFilter
 		}
 	}
 	
+	public function buildTree($isCache = false): SensitiveWordFilter
+	{
+		$this->iCache = $isCache;
+		
+		if (!empty($this->array)) {
+			$this->setTreeByArray($this->array);
+		}
+		
+		if (!empty($this->filePath)) {
+			$this->setTreeByFile($this->filePath);
+		}
+		
+		if ($this->iCache && !file_exists($this->file)) {
+			$catalog = substr($this->file, 0, strrpos($this->file, DIRECTORY_SEPARATOR));
+			if (!is_dir($catalog)) {
+				mkdir($catalog);
+			}
+			file_put_contents($this->file, gzcompress(serialize($this->words), 4));
+		}
+		
+		return $this;
+	}
+	
 	private function getWords()
 	{
 		if (file_exists($this->file) && $this->iCache) {
 			$this->words = $this->words ?? unserialize(gzuncompress(file_get_contents($this->file)));
 		} else {
 			$this->words = $this->words ?? new HashMap();
-			if (!empty($this->array)) {
-				$this->setTreeByArray($this->array);
-			}
-			
-			if (!empty($this->filePath)) {
-				$this->setTreeByFile($this->filePath);
-			}
-			
-			if ($this->iCache && !file_exists($this->file)) {
-				$catalog = substr($this->file, 0, strrpos($this->file, DIRECTORY_SEPARATOR));
-				if (!is_dir($catalog)) {
-					mkdir($catalog);
-				}
-				file_put_contents($this->file, gzcompress(serialize($this->words), 4));
-			}
 		}
 		
 		return $this->words;
@@ -390,13 +386,13 @@ class SensitiveWordFilter
 	 * 文件构建铭感词树
 	 *
 	 * @param $filepath
-	 * @return $this
+	 * @return void
 	 */
-	private function setTreeByFile($filepath): SensitiveWordFilter
+	private function setTreeByFile($filepath): void
 	{
 		if (file_exists($this->file) && $this->iCache) {
 			$this->words = $this->words ?? unserialize(gzuncompress(file_get_contents($this->file)));
-			return $this;
+			return;
 		}
 		
 		$this->words = $this->words ?? new HashMap();
@@ -412,7 +408,6 @@ class SensitiveWordFilter
 			$this->readFile($file);
 		}
 		
-		return $this;
 	}
 	
 	private function readFile($file): void
