@@ -1,5 +1,5 @@
 {
-    "name": "phpch/imi-sensitive-word-filter",
+    "name": "phpch/dfa-sensitive-word",
     "description": "PHP-dfa敏感词过滤",
     "keywords": ["敏感词过滤", "非法词过滤", "DFA算法"],
     "type": "library",
