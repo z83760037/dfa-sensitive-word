@@ -15,9 +15,17 @@ class SensitiveWordFilter
 	 *
 	 * @var int
 	 */
-	private int    $matchType   = 2;
+	private int $matchType = 2;
+	
 	private string $file;
-	private array  $disturbList = [];
+	
+	private $iCache = false;
+	
+	private array $disturbList = [];
+	
+	private array $filePath = [];
+	
+	private array $array = [];
 	
 	private function __construct()
 	{
@@ -81,111 +89,20 @@ class SensitiveWordFilter
 		return $this;
 	}
 	
-	/**
-	 * 数组构建铭感词树
-	 *
-	 * @param  array|null  $sensitiveWords
-	 * @return $this
-	 */
-	public function setTreeByArray(?array $sensitiveWords = null): SensitiveWordFilter
+	public function setArray(array $sensitiveWords): SensitiveWordFilter
 	{
-		if (file_exists($this->file)) {
-			$this->words = $this->words ?? unserialize(gzuncompress(file_get_contents($this->file)));
-			return $this;
-		}
-		
-		$this->words = $this->words ?? new HashMap();
-		
-		if (!empty($sensitiveWords)) {
-			foreach ($sensitiveWords as $word) {
-				$this->buildDFA(trim($word));
-			}
-		}
+		$this->array = $sensitiveWords;
 		return $this;
 	}
 	
-	/**
-	 *  将单个敏感词构建成树结构
-	 *
-	 * @param  string  $word
-	 * @return void
-	 */
-	private function buildDFA(string $word = ''): void
+	public function setFilePath($filePath): SensitiveWordFilter
 	{
-		if ($word == '') {
-			return;
+		if (!is_array($filePath)) {
+			$filePath = [$filePath];
 		}
 		
-		$tree = $this->getWords();
-		$wordLength = mb_strlen($word);
-		for ($i = 0; $i < $wordLength; $i++) {
-			$keyChar = mb_substr($word, $i, 1);
-			$treeTmp = $tree->get($keyChar);
-			if ($treeTmp) {
-				$tree = $treeTmp;
-			} else {
-				$newTree = new HashMap();
-				$newTree->put('isEnd', false);
-				
-				// 添加到集合
-				$tree->put($keyChar, $newTree);
-				$tree = $newTree;
-			}
-			
-			// 到达最后一个节点
-			if ($i == $wordLength - 1) {
-				$tree->put('isEnd', true);
-			}
-		}
-	}
-	
-	/**
-	 * 文件构建铭感词树
-	 *
-	 * @param $filepath
-	 * @return $this
-	 */
-	public function setTreeByFile($filepath): SensitiveWordFilter
-	{
-		if (file_exists($this->file)) {
-			$this->words = $this->words ?? unserialize(gzuncompress(file_get_contents($this->file)));
-			return $this;
-		}
-		
-		$this->words = $this->words ?? new HashMap();
-		if (!is_array($filepath)) {
-			$filepath = [$filepath];
-		}
-		
-		foreach ($filepath as $file) {
-			if (!file_exists($file)) {
-				continue;
-			}
-			
-			$this->readFile($file);
-		}
-		
+		$this->filePath = $filePath;
 		return $this;
-	}
-	
-	private function readFile($file): void
-	{
-		$fp = new SplFileObject($file, 'rb');
-		while (!$fp->eof()) {
-			$fp->fseek(0, SEEK_CUR);
-			$line = $fp->current(); // 当前行
-			
-			$line = trim($line);
-			$line = explode(",", $line);
-			foreach ($line as $v) {
-				$this->buildDFA(trim($v));
-			}
-			
-			// 指向下一个，不能少
-			$fp->next();
-		}
-		
-		$fp = null;
 	}
 	
 	/**
@@ -195,14 +112,7 @@ class SensitiveWordFilter
 	 */
 	public function setCache(): SensitiveWordFilter
 	{
-		if (!file_exists($this->file)) {
-			$catalog = substr($this->file, 0, strrpos($this->file, DIRECTORY_SEPARATOR));
-			if (!is_dir($catalog)) {
-				mkdir($catalog);
-			}
-			file_put_contents($this->file, gzcompress(serialize($this->words), 4));
-		}
-		
+		$this->iCache = true;
 		return $this;
 	}
 	
@@ -392,14 +302,136 @@ class SensitiveWordFilter
 		return str_repeat($replaceChar, $len);
 	}
 	
+	/**
+	 * 数组构建铭感词树
+	 *
+	 * @param  array|null  $sensitiveWords
+	 * @return $this
+	 */
+	private function setTreeByArray(?array $sensitiveWords = null): SensitiveWordFilter
+	{
+		if (file_exists($this->file) && $this->iCache) {
+			$this->words = $this->words ?? unserialize(gzuncompress(file_get_contents($this->file)));
+			return $this;
+		}
+		
+		$this->words = $this->words ?? new HashMap();
+		
+		if (!empty($sensitiveWords)) {
+			foreach ($sensitiveWords as $word) {
+				$this->buildDFA(trim($word));
+			}
+		}
+		return $this;
+	}
+	
+	/**
+	 *  将单个敏感词构建成树结构
+	 *
+	 * @param  string  $word
+	 * @return void
+	 */
+	private function buildDFA(string $word = ''): void
+	{
+		if ($word == '') {
+			return;
+		}
+		
+		$tree = $this->words ?? new HashMap();
+		$wordLength = mb_strlen($word);
+		for ($i = 0; $i < $wordLength; $i++) {
+			$keyChar = mb_substr($word, $i, 1);
+			$treeTmp = $tree->get($keyChar);
+			if ($treeTmp) {
+				$tree = $treeTmp;
+			} else {
+				$newTree = new HashMap();
+				$newTree->put('isEnd', false);
+				
+				// 添加到集合
+				$tree->put($keyChar, $newTree);
+				$tree = $newTree;
+			}
+			
+			// 到达最后一个节点
+			if ($i == $wordLength - 1) {
+				$tree->put('isEnd', true);
+			}
+		}
+	}
+	
 	private function getWords()
 	{
-		if (file_exists($this->file)) {
+		if (file_exists($this->file) && $this->iCache) {
 			$this->words = $this->words ?? unserialize(gzuncompress(file_get_contents($this->file)));
 		} else {
 			$this->words = $this->words ?? new HashMap();
+			if (!empty($this->array)) {
+				$this->setTreeByArray($this->array);
+			}
+			
+			if (!empty($this->filePath)) {
+				$this->setTreeByFile($this->filePath);
+			}
+			
+			if ($this->iCache && !file_exists($this->file)) {
+				$catalog = substr($this->file, 0, strrpos($this->file, DIRECTORY_SEPARATOR));
+				if (!is_dir($catalog)) {
+					mkdir($catalog);
+				}
+				file_put_contents($this->file, gzcompress(serialize($this->words), 4));
+			}
 		}
 		
 		return $this->words;
+	}
+	
+	/**
+	 * 文件构建铭感词树
+	 *
+	 * @param $filepath
+	 * @return $this
+	 */
+	private function setTreeByFile($filepath): SensitiveWordFilter
+	{
+		if (file_exists($this->file) && $this->iCache) {
+			$this->words = $this->words ?? unserialize(gzuncompress(file_get_contents($this->file)));
+			return $this;
+		}
+		
+		$this->words = $this->words ?? new HashMap();
+		if (!is_array($filepath)) {
+			$filepath = [$filepath];
+		}
+		
+		foreach ($filepath as $file) {
+			if (!file_exists($file)) {
+				continue;
+			}
+			
+			$this->readFile($file);
+		}
+		
+		return $this;
+	}
+	
+	private function readFile($file): void
+	{
+		$fp = new SplFileObject($file, 'rb');
+		while (!$fp->eof()) {
+			$fp->fseek(0, SEEK_CUR);
+			$line = $fp->current(); // 当前行
+			
+			$line = trim($line);
+			$line = explode(",", $line);
+			foreach ($line as $v) {
+				$this->buildDFA(trim($v));
+			}
+			
+			// 指向下一个，不能少
+			$fp->next();
+		}
+		
+		$fp = null;
 	}
 }
