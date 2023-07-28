@@ -42,4 +42,22 @@ class SampleTest extends TestCase
 		
 		$this->assertEquals('我是<span>阿扁</span>', $a->mark('我是阿扁'));
 	}
+	
+	public function testGetBadWord() {
+		$handle = SensitiveWordFilter::init()->setFilePath('tests/words/key.txt')->buildTree(true);
+		$filterContent = $handle->getBadWord('我是阿扁我借种给阿扁');
+		
+		$badWords = $handle->getBadWord('我是阿扁我借种给阿扁',2);
+		$this->assertEquals('阿扁', $filterContent[0]);
+		$this->assertEquals('借种', $badWords[1]);
+		$this->assertCount(2, $badWords);
+		$this->assertCount(3, $filterContent);
+	}
+	
+	public function testContains()
+	{
+		$handle = SensitiveWordFilter::init()->setFilePath('tests/words/key.txt')->buildTree(true);
+		$filter = $handle->contains('我是阿扁我借种给阿扁');
+		$this->assertTrue($filter);
+	}
 }
